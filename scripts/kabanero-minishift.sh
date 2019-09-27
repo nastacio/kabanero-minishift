@@ -14,7 +14,7 @@ minishift_profile=kabanero
 vm_driver=kvm
 osx_vm_driver=hyperkit
 
-docker_registry=https://index.docker.io/v1/
+registry_url=https://index.docker.io/v1/
 
 line="--------------------------------------------------------------------------------"
 
@@ -363,7 +363,7 @@ function validateKabanero() {
     if [ ${remote_registry} -eq 1 ]; then 
         APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="index.docker.io/${registry_user}/appsody-hello-world" DOCKER_USERNAME=${registry_user} DOCKER_PASSWORD=${registry_password} DOCKER_EMAIL=${registry_email} DOCKER_URL=${registry_url}  ${scriptdir}/appsody-tekton-example-manual-run.sh
     else
-        APP_REPO=https://github.com/nastacio/appsody-nodejs/  ${scriptdir}/
+        APP_REPO=https://github.com/nastacio/appsody-nodejs/  ${scriptdir}/appsody-tekton-example-manual-run.shs
     fi
     cd - > /dev/null
 
@@ -440,7 +440,6 @@ verbose=0
 cleanPipes=0
 
 remote_registry=0
-registry_url=""
 docker_user=""
 docker_password=""
 docker_email=""
@@ -479,15 +478,15 @@ case $key in
     shift
     ;;
     --registry-user)
-    docker_user=$1
+    registry_user=$1
     shift
     ;;
     --registry-password)
-    docker_password=$1
+    registry_password=$1
     shift
     ;;
     --registry-email)
-    docker_email=$1
+    registry_email=$1
     shift
     ;;
     -h|--help)
@@ -515,7 +514,7 @@ if [ ${install} -eq 1 ] && [ ${teardown} -eq 1 ]; then
     logts "ERROR: The install and teardown options are mutually exclusive."
     exit 1
 fi
-if [ ${install} -eq 0 ] && [ ${teardown} -eq 0 ] && [ ${validate} -eq 0 ]; then
+if [ ${install} -eq 0 ] && [ ${teardown} -eq 0 ] && [ ${validate} -eq 0 ] && [ ${cleanPipes} -eq 0 ]; then
     logts "ERROR: No option was selected."
     usage
     exit 1

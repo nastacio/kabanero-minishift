@@ -10,6 +10,10 @@ DOCKER_IMAGE="${DOCKER_IMAGE:-docker-registry.default.svc:5000/kabanero/java-mic
 # Appsody project GitHub repository #
 APP_REPO="${APP_REPO:-https://github.com/dacleyra/appsody-hello-world/}"
 
+VERBOSE="${VERBOSE:false}"
+
+[ VERBOSE -eq "false" ] && set +x
+
 ### Tekton Example ###
 
 # Create deploy target Project Namespace #
@@ -21,20 +25,28 @@ APP_REPO="${APP_REPO:-https://github.com/dacleyra/appsody-hello-world/}"
 # Namespace #
 namespace=kabanero
 
+docker_secret=docker-push-sample
+
 # Grant SecurityContext to appsody-sa. Example PV uses hostPath
 oc -n ${namespace} get sa appsody-sa ||
 {
   oc -n ${namespace} create sa appsody-sa || true
+}
+
+{
   oc adm policy add-cluster-role-to-user cluster-admin -z appsody-sa -n ${namespace}
   oc adm policy add-scc-to-user hostmount-anyuid -z appsody-sa -n ${namespace}
 
-  [ ! "${DOCKER_USERNAME}" == ""] && [ ! "${DOCKER_PASSWORD}" == "" ] && [ ! "${DOCKER_EMAIL}" == "" ]  && [ ! "${DOCKER_URL}" == "" ] || 
+  [ ! "${DOCKER_USERNAME}" == "" ] && [ ! "${DOCKER_PASSWORD}" == "" ] && [ ! "${DOCKER_EMAIL}" == "" ]  && [ ! "${DOCKER_URL}" == "" ] &&
   {
-  oc secrets new-dockercfg docker-push-sample -n ${namespace} \
+    oc get secret ${docker_secret} -n ${namespace} && \
+        oc delete secret  ${docker_secret} -n ${namespace}
+
+    oc create secret docker-registry ${docker_secret} -n ${namespace} \
     --docker-server=${DOCKER_URL} --docker-username="${DOCKER_USERNAME}" \
     --docker-password="${DOCKER_PASSWORD}" --docker-email="${DOCKER_EMAIL}"
-    oc secrets add serviceaccount/appsody-sa secrets/docker-push-sample --for=pull,mount -n ${namespace} 
-    oc secrets add serviceaccount/builder secrets/docker-push-sample  -n ${namespace} 
+    oc secrets add serviceaccount/appsody-sa secrets/${docker_secret} --for=pull,mount -n ${namespace} 
+    oc secrets add serviceaccount/builder secrets/${docker_secret}  -n ${namespace} 
   } 
 
   sleep 120
