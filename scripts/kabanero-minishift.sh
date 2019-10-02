@@ -38,7 +38,8 @@ function usage() {
     echo "        --clean-pipelines"
     echo "                     Delete all Tekton pipelines and related objects from Kabanero."
     echo "  -t  | --teardown   Uninstalls the minishift Kabanero VM."
-    echo "      | --validate   Validate the Kabanero installation."
+    echo "      | --validate   Validate the Kabanero installation with a manual pipeline run."
+    echo "      | --webhook    Sets up a webhook for the Git repository specified with other parameters."
     echo "  -r  | --remote-registry"
     echo "                     Indicates whether a remote docker registry should be used."
     echo "      | --registry-url <docker_registry>"
@@ -217,9 +218,9 @@ function checkLinuxPrereqs() {
         cd ~/tmp
         rm -rf ${minishift_dir}
         curl -L https://github.com/minishift/minishift/releases/download/v1.34.1/minishift-1.34.1-linux-amd64.tgz | tar zxf -
-        cd ${minishift_dir}
+        cd "${minishift_dir}"
         sudo cp -f minishift /usr/local/bin
-        rm -rf ${minishift_dir}
+        rm -rf "${minishift_dir}"
     )
 
     hypervisor=kvm
@@ -266,6 +267,8 @@ function createKabaneroMinishift() {
     eval $(minishift docker-env --profile ${minishift_profile} )
 
     minishift --profile ${minishift_profile} ssh "echo \"*               -       nofile           16384\" | sudo tee -a /etc/security/limits.conf"
+    minishift --profile ${minishift_profile} ssh "echo \"$(minishift openshift registry | cut -d ":" -f 1) docker-registry.default.svc\" | sudo tee -a /etc/hosts"
+
 
     # Validate env
     # oc new-app https://github.com/sclorg/nodejs-ex -l name=myapp
@@ -347,11 +350,6 @@ function validateKabanero() {
 
     oc login -u system:admin
     
-    # Unclear if this is needed
-    oc policy add-role-to-user registry-editor service-sa
-    oc policy add-role-to-user registry-editor serviceaccount
-    oc policy add-role-to-user registry-editor developer
-
     # Sample Appsody project with manual Tekton pipeline run
     # Create a Persistent Volume for the pipeline to use. A sample hostPath pv.yaml is provided.
     # READ THIS FIRST
@@ -361,9 +359,9 @@ function validateKabanero() {
     ## Create the pipeline and execute the example manual pipeline run
     #APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="docker-registry.default.svc:5000/kabanero/appsody-hello-world" ./appsody-tekton-example-manual-run.sh 
     if [ ${remote_registry} -eq 1 ]; then 
-        APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="index.docker.io/${registry_user}/appsody-hello-world" DOCKER_USERNAME=${registry_user} DOCKER_PASSWORD=${registry_password} DOCKER_EMAIL=${registry_email} DOCKER_URL=${registry_url}  ${scriptdir}/appsody-tekton-example-manual-run.sh
+        APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="index.docker.io/${registry_user}/appsody-hello-world" DOCKER_USERNAME=${registry_user} DOCKER_PASSWORD=${registry_password} DOCKER_EMAIL=${registry_email} DOCKER_URL=${registry_url} "${scriptdir}/appsody-tekton-example-manual-run.sh"
     else
-        APP_REPO=https://github.com/nastacio/appsody-nodejs/  ${scriptdir}/appsody-tekton-example-manual-run.shs
+        APP_REPO=https://github.com/nastacio/appsody-nodejs/  "${scriptdir}/appsody-tekton-example-manual-run.sh"
     fi
     cd - > /dev/null
 
