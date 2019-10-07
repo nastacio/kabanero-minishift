@@ -31,7 +31,7 @@ The main script for deploying Kabanero on Minishift is kabanero-minishift.sh, wh
 
 ```
 $ git clone https://github.com/nastacio/kabanero-minishift.git
-$ cd scripts
+$ cd kabanero-minishift/scripts
 $ ./kabanero-minishift.sh -h
 
 
