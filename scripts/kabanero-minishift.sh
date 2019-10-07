@@ -4,12 +4,13 @@ set -e
 set +x
 
 curdir=`pwd`
-scriptdir=$(pwd `dirname "${0}"`)
+scriptdir=`dirname "${0}"`
 scriptname=`basename "${0}"`
 
 #
 # Parameter defaults
 #
+kabanero_version=0.1.2
 minishift_profile=kabanero
 vm_driver=kvm
 osx_vm_driver=hyperkit
@@ -24,7 +25,7 @@ line="--------------------------------------------------------------------------
 function usage() {
     echo "Creates the Kabanero foundation environment for local development."
     echo ""
-    echo "For problems related to minishift, please refer to the minishift troubleshooting guide:"
+    echo "For problems related to Minishift, please refer to the Minishift troubleshooting guide:"
     echo "https://docs.okd.io/latest/minishift/troubleshooting/index.html"
     echo
     echo "Usage: $scriptname [OPTIONS]...[ARGS]"
@@ -37,9 +38,8 @@ function usage() {
     echo "                     Default for MacOS is ${osx_vm_driver}."
     echo "        --clean-pipelines"
     echo "                     Delete all Tekton pipelines and related objects from Kabanero."
-    echo "  -t  | --teardown   Uninstalls the minishift Kabanero VM."
-    echo "      | --validate   Validate the Kabanero installation with a manual pipeline run."
-    echo "      | --webhook    Sets up a webhook for the Git repository specified with other parameters."
+    echo "  -t  | --teardown   Uninstalls the Minishift profile for Kabanero."
+    echo "      | --validate   Triggers a manual run of a Kabanero pipeline."
     echo "  -r  | --remote-registry"
     echo "                     Indicates whether a remote docker registry should be used."
     echo "      | --registry-url <docker_registry>"
@@ -71,58 +71,9 @@ function logts {
 
 
 #
-# Secures the Docker registry
 #
-# Based on https://docs.okd.io/latest/install_config/registry/securing_and_exposing_registry.html
-#          https://blog.openshift.com/remotely-push-pull-container-images-openshift/
 #
-function secureDockerRegistry() {
-    logts "INFO: Securing Docker Registry"
-
-    # https://docs.okd.io/latest/dev_guide/secrets.html#service-serving-certificate-secrets
-    oc annotate service  docker-registry  -n default service.alpha.openshift.io/serving-cert-secret-name="registry-certificates"
-
-    logts "INFO: Waiting for registry-certificates secret to become available"
-    sleep 2
-    until oc get secret registry-certificates -n default 
-    do
-         sleep 2
-    done
-
-    oc secrets link registry registry-certificates -n default
-    oc secrets link default  registry-certificates -n default
-
-    oc rollout pause dc/docker-registry -n default
-    oc set volume dc/docker-registry --add --type=secret --secret-name=registry-certificates -m /etc/secrets -n default 
-    oc set env dc/docker-registry \
-    REGISTRY_HTTP_TLS_CERTIFICATE=/etc/secrets/tls.crt \
-    REGISTRY_HTTP_TLS_KEY=/etc/secrets/tls.key -n default
-
-    oc patch dc/docker-registry -p '{"spec": {"template": {"spec": {"containers":[{
-    "name":"registry",
-    "livenessProbe":  {"httpGet": {"scheme":"HTTPS"}}
-  }]}}}}' -n default
-
-    oc patch dc/docker-registry -p '{"spec": {"template": {"spec": {"containers":[{
-    "name":"registry",
-    "readinessProbe":  {"httpGet": {"scheme":"HTTPS"}}
-  }]}}}}' -n default
-
-    oc rollout resume dc/docker-registry -n default
-
-    logts "INFO: Updating trusted certificate database with cert for internal docker registry"
-    # https://docs.openshift.com/online/dev_guide/managing_images.html#using-image-pull-secrets
-    # minishift --profile ${minishift_profile} ssh "echo \"$(oc get secret registry-certificates -n default -o "jsonpath={.data.tls\.crt}" | base64 -D)\" | sudo tee  /usr/share/pki/ca-trust-source/anchors/local.registry.ca.crt"
-    # minishift --profile ${minishift_profile} ssh "sudo update-ca-trust"
-    # minishift --profile ${minishift_profile} openshift restart
-
-    # https://docs.openshift.com/online/dev_guide/secrets.html
-    # https://github.com/knative/serving/issues/2136#issuecomment-438387033
-    # oc set env -n knative-serving deployment/controller SSL_CERT_DIR=/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt 
-    # https://docs.openshift.com/online/dev_guide/managing_images.html#insecure-registries  
-
-    logts "INFO: Secured Docker Registry"
-
+function getDockerRegistryLogs() {
     if [ $verbose -eq 1 ]; then
         logts "DEBUG: Docker Registry logs" 
         oc logs $(oc get pods -l docker-registry=default -n default  --output=jsonpath={.items[0].metadata.name}) -n default  --all-containers | grep -v healthz
@@ -140,7 +91,10 @@ function cloneKabaneroScripts() {
     mkdir -p "${tmpdir}"
     rm -rf "${tmpdir}/kabanero-foundation"
     cd "${tmpdir}"
-    git clone https://github.com/kabanero-io/kabanero-foundation.git
+
+    curl -sL https://github.com/kabanero-io/kabanero-foundation/archive/v${kabanero_version}.zip -o kabanero-foundation.zip
+    unzip -q kabanero-foundation.zip
+    mv kabanero-foundation-${kabanero_version} kabanero-foundation
 }
 
 
@@ -283,7 +237,8 @@ function createKabaneroMinishift() {
     oc login -u system:admin
     oc project default
 
-    secureDockerRegistry
+    minishift addons enable registry-route
+    minishift addons apply registry-route
 
     logts "INFO: Starting Kabanero installation"
     # https://github.com/kabanero-io/docs/blob/master/ref/scripts/install-kabanero-foundation.sh
@@ -316,8 +271,8 @@ function createKabaneroMinishift() {
     oc policy add-role-to-user tekton-dashboard-minimal system
 
     logts "INFO: Kabanero installation on minishift is complete."
-
-    oc get route -n kabanero
+    logts "INFO: You can access the Tekton dashboard in your browser through the following route."
+    minishift --profile ${minishift_profile} openshift service tekton-dashboard 
 
     return ${result}
 }
@@ -359,9 +314,10 @@ function validateKabanero() {
     ## Create the pipeline and execute the example manual pipeline run
     #APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="docker-registry.default.svc:5000/kabanero/appsody-hello-world" ./appsody-tekton-example-manual-run.sh 
     if [ ${remote_registry} -eq 1 ]; then 
-        APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="index.docker.io/${registry_user}/appsody-hello-world" DOCKER_USERNAME=${registry_user} DOCKER_PASSWORD=${registry_password} DOCKER_EMAIL=${registry_email} DOCKER_URL=${registry_url} "${scriptdir}/appsody-tekton-example-manual-run.sh"
+        APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="index.docker.io/${registry_user}/appsody-hello-world:1.0.0" DOCKER_USERNAME=${registry_user} DOCKER_PASSWORD=${registry_password} DOCKER_EMAIL=${registry_email} DOCKER_URL=${registry_url} "${scriptdir}/appsody-tekton-example-manual-run.sh"
     else
-        APP_REPO=https://github.com/nastacio/appsody-nodejs/  "${scriptdir}/appsody-tekton-example-manual-run.sh"
+        registryHostPort=$(oc get service -l docker-registry=default -n default -o jsonpath="{.items[0].spec.clusterIP}:{.items[0].spec.ports[].port}")
+        APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="${registryHostPort}/kabanero/nodejs-express" "${scriptdir}/appsody-tekton-example-manual-run.sh"
     fi
     cd - > /dev/null
 
@@ -389,42 +345,11 @@ function validateKabanero() {
 #
 #
 #
-function deleteAllTektonPipelines() {
+function deleteAllTektonPipelineRuns() {
     oc login -u system:admin
 
     oc get pipelineruns -n kabanero | tr -s " " | cut -d " " -f 1| grep -v NAME  | xargs -I name oc -n kabanero delete pipelineruns name
     oc get pipelineresources -n kabanero | tr -s " " | cut -d " " -f 1 | grep -v NAME  | xargs -I name oc -n kabanero delete pipelineresources name
-    oc get pipelines -n kabanero | grep appsody | tr -s " " | cut -d " " -f 1 | xargs -I name oc -n kabanero delete pipelines name
-}
-
-
-#
-#
-#
-function createAlternativePipelineDefinition() {
-    oc login -u system:admin
-
-     oc delete -n kabanero -f appsody-build-task2.json
-     oc delete -n kabanero -f appsody-build-pipeline2.yaml
-     oc delete -n kabanero -f appsody-pipeline-run2.yaml
-
-     oc apply -n kabanero -f appsody-build-task2.json --overwrite=true --validate=true --wait=true
-     oc apply -n kabanero -f appsody-build-pipeline2.yaml --overwrite=true --validate=true --wait=true
-     oc apply -n kabanero -f appsody-pipeline-run2.yaml --overwrite=true --validate=true --wait=true
-
-     oc logs -f $(oc get pods -l tekton.dev/pipelineRun=manual-pipeline-run8  -n kabanero --output=jsonpath={.items[0].metadata.name}) -n kabanero --all-containers
-
-
-    #docker_secret=deployer-dockercfg-9vnpc
-    docker_secret=appsody-sa-token-4r4wt
-    mkdir -p .docker
-    oc get secret ${docker_secret} -n appsody-project -o "jsonpath={.data.\.dockercfg}" | base64 -D > .docker/config.json
-    oc get secret ${docker_secret} -n appsody-project -o "jsonpath={.metadata.annotations.openshift\.io/token\-secret\.value}" | docker --config .docker login -u serviceaccount --password-stdin  $(minishift openshift registry)
-
-    docker_secret=$(oc get secrets -n kabanero | grep appsody-sa-docker | cut -d " " -f 1)
-    oc get secret ${docker_secret} -n kabanero -o "jsonpath={.data.\.dockercfg}" | base64 -D > .docker/config.json
-    oc get secret ${docker_secret} -n kabanero -o "jsonpath={.metadata.annotations.openshift\.io/token\-secret\.value}" | docker --config .docker login -u serviceaccount --password-stdin  $(minishift openshift registry)
-
 }
 
 
@@ -548,7 +473,7 @@ if [ ${validate} -eq 1 ]; then
 fi
 
 if [ ${cleanPipes} -eq 1 ]; then
-    deleteAllTektonPipelines
+    deleteAllTektonPipelineRuns
     result=$?
 fi
 

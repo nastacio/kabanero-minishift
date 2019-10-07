@@ -25,6 +25,9 @@ GITHUB_REPO="${GITHUB_REPO:-${GITHUB_URL}/dacleyra/appsody-hello-world}"
 GITHUB_USERNAME="${GITHUB_USERNAME:-anonymous}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-githubtoken}"
 
+VERBOSE="${VERBOSE:true}"
+
+[ VERBOSE -eq "false" ] && set +x
 
 ### Tekton Example ###
 
@@ -39,6 +42,18 @@ oc -n ${namespace} create sa appsody-sa || true
 oc adm policy add-cluster-role-to-user cluster-admin -z appsody-sa -n ${namespace}
 oc adm policy add-scc-to-user hostmount-anyuid -z appsody-sa -n ${namespace}
 
+[ ! "${DOCKER_USERNAME}" == "" ] && [ ! "${DOCKER_PASSWORD}" == "" ] && [ ! "${DOCKER_EMAIL}" == "" ]  && [ ! "${DOCKER_URL}" == "" ] &&
+{
+  docker_secret=docker-push-sample
+
+  oc get secret ${docker_secret} -n ${namespace} && \
+      oc delete secret  ${docker_secret} -n ${namespace}
+
+  oc create secret docker-registry ${docker_secret} -n ${namespace} \
+  --docker-server=${DOCKER_URL} --docker-username="${DOCKER_USERNAME}" \
+  --docker-password="${DOCKER_PASSWORD}" --docker-email="${DOCKER_EMAIL}"
+  oc secrets add serviceaccount/appsody-sa secrets/${docker_secret}  -n ${namespace} 
+} 
 
 # Cleanup
 oc delete -n ${namespace} \

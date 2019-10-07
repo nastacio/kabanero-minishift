@@ -6,13 +6,17 @@ set -Eeuox pipefail
 
 # Resultant Appsody container image #
 DOCKER_IMAGE="${DOCKER_IMAGE:-docker-registry.default.svc:5000/kabanero/java-microprofile}"
+DOCKER_USERNAME="${DOCKER_USERNAME:-""}"
+DOCKER_PASSWORD="${DOCKER_PASSWORD:-""}"
+DOCKER_EMAIL="${DOCKER_EMAIL:-""}"
+DOCKER_URL="${DOCKER_URL:-""}"
 
 # Appsody project GitHub repository #
 APP_REPO="${APP_REPO:-https://github.com/dacleyra/appsody-hello-world/}"
 
-VERBOSE="${VERBOSE:false}"
+VERBOSE="${VERBOSE:true}"
 
-[ VERBOSE -eq "false" ] && set +x
+[ "${VERBOSE}" -eq "false" ] && set +x
 
 ### Tekton Example ###
 
@@ -25,8 +29,6 @@ VERBOSE="${VERBOSE:false}"
 # Namespace #
 namespace=kabanero
 
-docker_secret=docker-push-sample
-
 # Grant SecurityContext to appsody-sa. Example PV uses hostPath
 oc -n ${namespace} get sa appsody-sa ||
 {
@@ -36,20 +38,24 @@ oc -n ${namespace} get sa appsody-sa ||
 {
   oc adm policy add-cluster-role-to-user cluster-admin -z appsody-sa -n ${namespace}
   oc adm policy add-scc-to-user hostmount-anyuid -z appsody-sa -n ${namespace}
+  oc adm policy add-role-to-user admin system:serviceaccount:kabanero:appsody-sa -n kabanero
+  oc policy add-role-to-user system:image-builder system:serviceaccount:kabanero:appsody-sa  -n ${namespace} 
+  oc policy add-role-to-group system:image-builder system:serviceaccounts:kabanero -n ${namespace} 
 
   [ ! "${DOCKER_USERNAME}" == "" ] && [ ! "${DOCKER_PASSWORD}" == "" ] && [ ! "${DOCKER_EMAIL}" == "" ]  && [ ! "${DOCKER_URL}" == "" ] &&
   {
+    docker_secret=docker-push-sample
+
     oc get secret ${docker_secret} -n ${namespace} && \
         oc delete secret  ${docker_secret} -n ${namespace}
 
     oc create secret docker-registry ${docker_secret} -n ${namespace} \
     --docker-server=${DOCKER_URL} --docker-username="${DOCKER_USERNAME}" \
     --docker-password="${DOCKER_PASSWORD}" --docker-email="${DOCKER_EMAIL}"
-    oc secrets add serviceaccount/appsody-sa secrets/${docker_secret} --for=pull,mount -n ${namespace} 
-    oc secrets add serviceaccount/builder secrets/${docker_secret}  -n ${namespace} 
+    oc secrets add serviceaccount/appsody-sa secrets/${docker_secret}  -n ${namespace} 
   } 
 
-  sleep 120
+  # sleep 120
 
   # Workaround https://github.com/tektoncd/pipeline/issues/1103
   # Restart pipeline operator to avoid issue
@@ -116,7 +122,7 @@ spec:
   serviceAccount: appsody-sa
   timeout: "1h0m0s"  
   pipelineRef:
-    name: java-microprofile-build-deploy-pipeline
+    name: nodejs-express-build-deploy-pipeline
   trigger:
     type: manual
   resources:
