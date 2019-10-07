@@ -1,4 +1,6 @@
-    # kabanero-minishift
+# Kabanero on Minishift
+
+## Table of Contents
 
 - [Overview](#overview)
 - [Usage](#usage)
