@@ -219,6 +219,7 @@ function checkLinuxPrereqs() {
 function createKabaneroMinishift() {
     local result=1
 
+    cygwin=0
     case $(uname) in
         CYGWIN*)
         cygwin=1 
