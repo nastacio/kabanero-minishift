@@ -25,7 +25,7 @@ Minishift is not officially supported by Kabanero, so this set of scripts shows 
 
 ## Usage
 
-As a disclaimer, this script was primarily developed and tested on MacOS Mojave, though it should work on Windows 10 and Ubuntu installations as well. Testers needed and welcome.
+As a disclaimer, this script was primarily developed and tested on MacOS Mojave, though it should work on Windows 10 Pro/Enterprise and Ubuntu installations as well. For Windows 10, these instructions were tested in [Cygwin](https://www.cygwin.com/) shell running as an Administrator (a Minishift requirement), adding the non-default "unzip" package to the Cygwin installation. Windows 10 users should also note that the script currently hardcodes the name "External Virtual Switch" for the Hyper-V external virtual switch.
 
 The main script for deploying Kabanero on Minishift is kabanero-minishift.sh, which is capable of installing Kabanero on a new Minishift profile, trigger manual runs of a sample Kabanero pipeline, and eventually be used to remove the Kabanero installation.
 

@@ -107,6 +107,34 @@ function tearDownKabaneroMinishift() {
 }
 
 
+
+#
+#
+#
+function checkWindowsPrereqs() {
+    hyperVInstalled=$(systeminfo | grep "A hypervisor has been detected. Features required for Hyper-V will not be displayed." | wc -l)
+    if [ ${hyperVInstalled} -eq 0 ]; then
+        logts "Ensure you have Hyper-V installed: https://docs.okd.io/latest/minishift/getting-started/installing.html"
+        return 1
+    fi
+
+    minishift_dir=~/tmp/minishift-1.34.1-windows-amd64/
+
+    which minishift > /dev/null 2>&1 || (
+        # Download minishift
+        mkdir -p ~/tmp
+        cd ~/tmp
+        rm -rf ${minishift_dir}
+        curl -L https://github.com/minishift/minishift/releases/download/v1.34.1/minishift-1.34.1-windows-amd64.zip > minishift-1.34.1-windows-amd64.zip
+        unzip minishift-1.34.1-windows-amd64.zip
+        cd "${minishift_dir}"
+        cp minishift.exe $(cygpath -u $WINDIR/system32)
+    )
+
+    hypervisor=kvm
+}
+
+
 #
 #
 #
@@ -192,6 +220,10 @@ function createKabaneroMinishift() {
     local result=1
 
     case $(uname) in
+        CYGWIN*)
+        cygwin=1 
+        checkWindowsPrereqs
+        ;;
         "Darwin")
         checkMacOSPrereqs
         ;;
@@ -213,7 +245,11 @@ function createKabaneroMinishift() {
     logts "WARNING: VM restarts may require the profile to be recreated: https://docs.okd.io/latest/minishift/using/static-ip.html"
     log_level=1
     [ ${verbose} -eq 1 ] && log_level=3
-    minishift start --vm-driver=${hypervisor} --profile ${minishift_profile} -v ${log_level} --cpus 4 --memory=6GB
+    if [ ${cygwin} -eq 0 ]; then
+        minishift start --vm-driver=${hypervisor} --profile ${minishift_profile} -v ${log_level} --cpus 4 --memory=6GB
+    else
+        minishift start --profile ${minishift_profile} --hyperv-virtual-switch "External Virtual Switch" -v ${log_level} --cpus 4 --memory=6GB
+    fi
 
     minishift oc-env --profile ${minishift_profile} 
     eval $(minishift oc-env --profile ${minishift_profile} )
@@ -222,17 +258,6 @@ function createKabaneroMinishift() {
 
     minishift --profile ${minishift_profile} ssh "echo \"*               -       nofile           16384\" | sudo tee -a /etc/security/limits.conf"
     minishift --profile ${minishift_profile} ssh "echo \"$(minishift openshift registry | cut -d ":" -f 1) docker-registry.default.svc\" | sudo tee -a /etc/hosts"
-
-
-    # Validate env
-    # oc new-app https://github.com/sclorg/nodejs-ex -l name=myapp
-    # oc logs -f bc/nodejs-ex
-    # oc status
-    # oc status --suggest
-    # oc get all
-    # oc expose svc/nodejs-ex
-    # oc get all --all-namespaces | grep nodejs
-    # minishift openshift service nodejs-ex --in-browser
 
     oc login -u system:admin
     oc project default
@@ -268,7 +293,7 @@ function createKabaneroMinishift() {
     oc scale deploy controller -n knative-serving --replicas=1
 
     oc policy add-role-to-user tekton-dashboard-minimal developer
-    oc policy add-role-to-user tekton-dashboard-minimal system
+    oc adm policy add-role-to-user admin system -n kabanero
 
     logts "INFO: Kabanero installation on minishift is complete."
     logts "INFO: You can access the Tekton dashboard in your browser through the following route."
