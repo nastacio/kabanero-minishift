@@ -27,14 +27,19 @@ Minishift is not officially supported by Kabanero, so this set of scripts shows 
 
 As a disclaimer, this script was primarily developed and tested on MacOS Mojave, though it should work on Windows 10 Pro/Enterprise and Ubuntu installations as well. For Windows 10, these instructions were tested in [Cygwin](https://www.cygwin.com/) shell running as an Administrator (a Minishift requirement), adding the non-default "unzip" package to the Cygwin installation. Windows 10 users should also note that the script currently hardcodes the name "External Virtual Switch" for the Hyper-V external virtual switch.
 
-The main script for deploying Kabanero on Minishift is kabanero-minishift.sh, which is capable of installing Kabanero on a new Minishift profile, trigger manual runs of a sample Kabanero pipeline, and eventually be used to remove the Kabanero installation.
+The main script for deploying Kabanero on Minishift is kabanero-minishift.sh, which is capable of installing Kabanero on a new Minishift profile, trigger manual runs of a sample Kabanero pipeline, and also remove the Kabanero installation.
+
+In order to get started with the deployment, clone this repository and inspect the command-line options, with the following commands:
 
 ```
-$ git clone https://github.com/nastacio/kabanero-minishift.git
-$ cd kabanero-minishift/scripts
-$ ./kabanero-minishift.sh -h
+git clone https://github.com/nastacio/kabanero-minishift.git
+cd kabanero-minishift/scripts
+./kabanero-minishift.sh -h
+```
 
+You should see output like this:
 
+```
 Creates the Kabanero foundation environment for local development.
 
 For problems related to Minishift, please refer to the Minishift troubleshooting guide:
@@ -75,19 +80,23 @@ Usage: kabanero-minishift.sh [OPTIONS]...[ARGS]
 
 The installation procedure deploys the [Kabanero Foundation](https://kabanero.io/operations/) on a Minishift profile named "kabanero".
 
-To that end, the script will execute steps that can be summarized as follows:
+The script will execute the following steps:
 
-* Verify the core prerequisites for minishift and redirect users to instructions on how to install these prerequisites if missing
+* Verify the core prerequisites for Minishift and redirect users to instructions on how to install these prerequisites if missing
 * Install Minishift if not already installed
 * Start Minishift with a profile named "kabanero"
 * Install and start Kabanero Foundation on Minishift
 
-Example:
 
+Start the installation with:
 
 ```
-$ ./kabanero-minishift.sh -i
+./kabanero-minishift.sh -i
+```
 
+The command will take a few minutes to run, producing output similar to the output below, which is truncated for the purposes of illustration:
+
+```
 Mon, 07 Oct 2019 07:58:56 -0400  INFO: Initiating Kabanero installation on minishift.
 Mon, 07 Oct 2019 07:59:01 -0400  INFO: Checking if hypervisor hyperkit is installed.
 Mon, 07 Oct 2019 07:59:03 -0400  INFO: Starting minishift profile kabanero
@@ -130,11 +139,11 @@ Mon, 07 Oct 2019 08:06:25 -0400  INFO: You can access the Tekton dashboard in yo
 ```
 
 
-## Validate installation
+## Validate the installation
 
-Many of the Minishift and Kabanero initialization steps occurs asynchronously, so that the successful completion of the installation steps is a positive, but insufficient indication that the final Kabanero installation is fully operational.
+Many of the Minishift and Kabanero initialization steps occur asynchronously, so that the successful completion of the installation steps does not guarantee that the final Kabanero installation is fully operational.
 
-In order to ensure the entire installation is fully operational, we can can follow the sections below, accessing the OKD Console, the Tekton dashboard, and then completing a run of a Kabanero pipeline to provision a sample application.
+In order to ensure that the entire installation is fully operational, we can can follow the sections below, accessing the OKD Console, the Tekton dashboard, and then completing a run of a Kabanero pipeline to provision a sample application.
 
 
 ### OKD Console
@@ -144,12 +153,12 @@ Once Minishift and Kabanero are up and running, you can visually inspect the res
 To launch the OKD console, enter the following in the command-line:
 
 ```
-$ minishift console
+minishift console
 ```
 
-You should be presented with the [OKD login screen](images/okd-login.png) in your default browser and be able to login with the system user and password for OKD (the default user and password is `system:admin`).
+You should see the [OKD login screen](images/okd-login.png) in your default browser and be able to login with the system user and password for OKD (the default user and password is `system:admin`).
 
- A successful login means Minishift is working properly. If you are interested in OKD itself, you can follow the [Web Console Walkthrough](https://docs.okd.io/latest/getting_started/developers_console.html) in the OKD website to explore other functionality.
+A successful login means Minishift is working properly. If you are interested in OKD itself, you can follow the [Web Console Walkthrough](https://docs.okd.io/latest/getting_started/developers_console.html) in the OKD website to explore other functionality.
 
 If you would like to understand more about how Minishift can help with your other development activities, you can also refer to the article titled [Learn OpenShift with Minishift](https://www.redhat.com/sysadmin/learn-openshift-minishift)
 
@@ -157,19 +166,19 @@ If you would like to understand more about how Minishift can help with your othe
 
 The next level of validation is to browse around the Tekton dashboard, which is installed indirectly with the Kabanero Foundation.
 
-You can recall that URL at any point with the following command:
+You can launch the dashboard by running the following command:
 
 ```
- $ minishift openshift service tekton-dashboard
-
-|-----------|------------------|---------------------------------------------------------|
-| NAMESPACE |       NAME       |                        ROUTE-URL                        |
-|-----------|------------------|---------------------------------------------------------|
-| kabanero  | tekton-dashboard | https://tekton-dashboard-kabanero.192.168.64.110.nip.io |
-|-----------|------------------|---------------------------------------------------------|
+minishift --profile kabanero openshift service tekton-dashboard --in-browser
 ```
 
-Once you open that route URL in your web-browser, you may be prompted for OKD user credentials if you are not already logged into the OKD console. Once again, you can use the system user and password.
+This command will display the URL for the dashboard and proceed to launch it in your default browser:
+
+```
+Opening the route/NodePort https://tekton-dashboard-kabanero.192.168.64.110.nip.io in the default browser...
+```
+
+Once the dashboard is launched, you may be prompted for OKD user credentials if you are not already logged into the OKD console. Once again, you can use the system user and password.
 
 You should see a list of available pipelines in the "Tekton/Pipelines" tab:
 
@@ -180,10 +189,16 @@ You should see a list of available pipelines in the "Tekton/Pipelines" tab:
 
 The final test of a Kabanero installation is to trigger a pipeline run, which will pull code from an Appsody application stored in a GitHub repository, reassemble the source tree, build it, and then, ultimately, deploy it to the OKD cluster as a Knative microservice.
 
-```
-$ cd scripts
-$ ./kabanero-minishift.sh --validate
+Start the pipeline run with the following commands:
 
+```
+cd scripts
+./kabanero-minishift.sh --validate
+```
+
+This command may take a few minutes to complete, producing output similar to the output below, which is truncated for illustrative purposes:
+
+```
 ...
 
 + oc -n kabanero apply -f -
@@ -202,8 +217,8 @@ You can also follow the pipeline run status and logs from the Tekton dashboard, 
 Once the run is completed, you should see a newly generated docker image for the project:
 
 ```
-# eval $(minishift docker-env)
-# docker images | grep "kabanero/node"
+eval $(minishift docker-env)
+docker images | grep "kabanero/node"
 
 172.30.1.1:5000/kabanero/nodejs-express    <none>     460bf9561eb3        8 minutes ago       231MB
 ```
@@ -211,7 +226,7 @@ Once the run is completed, you should see a newly generated docker image for the
 This sample defers the instanstiation of the application to the serving module of [Knative](https://cloud.google.com/knative/). You should also see the new Knative route created for the application with the following command:
 
 ```
-# oc get route.serving.knative.dev -l "serving.knative.dev/service=appsody-hello-world" -n kabanero 
+oc get route.serving.knative.dev -l "serving.knative.dev/service=appsody-hello-world" -n kabanero 
 
 NAME                  URL                                                         READY     REASON
 appsody-hello-world   http://appsody-hello-world.kabanero.192.168.64.110.nip.io   True      
@@ -222,13 +237,13 @@ This Kabanero pipeline for nodes-express applications defers the instantiation o
 You can also see the status of the Kubernetes pod running the sample application with the following command:
 
 ```
-$ oc get pods -n kabanero -l="serving.knative.dev/service=appsody-hello-world"
+oc get pods -n kabanero -l="serving.knative.dev/service=appsody-hello-world"
 
 NAME                                                    READY     STATUS    RESTARTS   AGE
 appsody-hello-world-wwhhg-deployment-597f68f575-p4nd9   2/2       Running   0          1m
 
 
-$ curl http://appsody-hello-world.kabanero.192.168.64.110.nip.io/
+curl http://appsody-hello-world.kabanero.192.168.64.110.nip.io/
 
 Hello from Appsody!
 ```
@@ -238,7 +253,7 @@ Hello from Appsody!
 After a few minutes of inactivity, you should see Knative removing the pod created to serve requests for the application:
 
 ```
-$ oc get pods -n kabanero -l="serving.knative.dev/service=appsody-hello-world"
+oc get pods -n kabanero -l="serving.knative.dev/service=appsody-hello-world"
 
 No resources found.
 ```
@@ -248,8 +263,8 @@ No resources found.
 Successive pipeline runs will create more and more resources inside OKD, so at some point you may just want to delete all resources created so far:
 
 ```
-$ cd scripts
-$ ./kabanero-minishift.sh --clean-pipelines
+cd scripts
+./kabanero-minishift.sh --clean-pipelines
 
 ...
 pipelinerun.tekton.dev "manual-pipeline-run" deleted
@@ -261,12 +276,16 @@ pipelineresource.tekton.dev "git-source" deleted
 
 ## Uninstall
 
-There may be multiple scenarios where you end up needing to tear-down the whole Minishift "kabanero" profile, which can be accomplished with this command:
+There may be multiple scenarios where you end up needing to tear-down the whole Minishift "kabanero" profile, which can be accomplished with the `--teardown` command option, as follows:
 
 ```
-$ cd scripts
-$ ./kabanero-minishift.sh --teardown
+cd scripts
+./kabanero-minishift.sh --teardown
+```
 
+You will be prompted a couple of times to continue and delete the profile, with screen prompts looking like the output below:
+
+```
 ...
 You are deleting the Minishift VM: 'kabanero'. Do you want to continue [y/N]?: y
 Removing entries from kubeconfig for cluster: 192-168-64-110:8443
