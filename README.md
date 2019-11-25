@@ -153,7 +153,7 @@ Once Minishift and Kabanero are up and running, you can visually inspect the res
 To launch the OKD console, enter the following in the command-line:
 
 ```
-minishift console
+minishift --profile kabanero console
 ```
 
 You should see the [OKD login screen](images/okd-login.png) in your default browser and be able to login with the system user and password for OKD (the default user and password is `system:admin`).

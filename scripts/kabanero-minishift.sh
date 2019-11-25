@@ -10,7 +10,7 @@ scriptname=`basename "${0}"`
 #
 # Parameter defaults
 #
-kabanero_version=0.1.2
+kabanero_version=0.2.1
 minishift_profile=kabanero
 vm_driver=kvm
 osx_vm_driver=hyperkit
@@ -92,7 +92,7 @@ function cloneKabaneroScripts() {
     rm -rf "${tmpdir}/kabanero-foundation"
     cd "${tmpdir}"
 
-    curl -sL https://github.com/kabanero-io/kabanero-foundation/archive/v${kabanero_version}.zip -o kabanero-foundation.zip
+    curl -sL https://github.com/kabanero-io/kabanero-foundation/archive/${kabanero_version}.zip -o kabanero-foundation.zip
     unzip -q kabanero-foundation.zip
     mv kabanero-foundation-${kabanero_version} kabanero-foundation
 }
@@ -270,7 +270,10 @@ function createKabaneroMinishift() {
     # https://github.com/kabanero-io/docs/blob/master/ref/scripts/install-kabanero-foundation.sh
     cloneKabaneroScripts "${WORKDIR}"
     cd "${WORKDIR}/kabanero-foundation/scripts"
-    openshift_master_default_subdomain=$(minishift ip).nip.io ./install-kabanero-foundation.sh
+
+    # Needed to add KABANERO_BRANCH=0.2.2 due to https://github.com/kabanero-io/kabanero-operator/issues/249
+    KABANERO_BRANCH=0.2.2 openshift_master_default_subdomain=$(minishift ip).nip.io ./install-kabanero-foundation.sh
+
     result=$?
     cd - > /dev/null
 
@@ -338,7 +341,6 @@ function validateKabanero() {
     oc apply -f pv.yaml
 
     ## Create the pipeline and execute the example manual pipeline run
-    #APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="docker-registry.default.svc:5000/kabanero/appsody-hello-world" ./appsody-tekton-example-manual-run.sh 
     if [ ${remote_registry} -eq 1 ]; then 
         APP_REPO=https://github.com/nastacio/appsody-nodejs/  DOCKER_IMAGE="index.docker.io/${registry_user}/appsody-hello-world:1.0.0" DOCKER_USERNAME=${registry_user} DOCKER_PASSWORD=${registry_password} DOCKER_EMAIL=${registry_email} DOCKER_URL=${registry_url} "${scriptdir}/appsody-tekton-example-manual-run.sh"
     else
