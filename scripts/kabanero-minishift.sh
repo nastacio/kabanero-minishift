@@ -10,7 +10,7 @@ scriptname=`basename "${0}"`
 #
 # Parameter defaults
 #
-kabanero_version=0.2.1
+kabanero_version=0.2.2
 minishift_profile=kabanero
 vm_driver=kvm
 osx_vm_driver=hyperkit
@@ -271,8 +271,7 @@ function createKabaneroMinishift() {
     cloneKabaneroScripts "${WORKDIR}"
     cd "${WORKDIR}/kabanero-foundation/scripts"
 
-    # Needed to add KABANERO_BRANCH=0.2.2 due to https://github.com/kabanero-io/kabanero-operator/issues/249
-    KABANERO_BRANCH=0.2.2 openshift_master_default_subdomain=$(minishift ip).nip.io ./install-kabanero-foundation.sh
+    openshift_master_default_subdomain=$(minishift ip).nip.io ./install-kabanero-foundation.sh
 
     result=$?
     cd - > /dev/null
@@ -299,9 +298,15 @@ function createKabaneroMinishift() {
     oc policy add-role-to-user tekton-dashboard-minimal developer
     oc adm policy add-role-to-user admin system -n kabanero
 
-    logts "INFO: Kabanero installation on minishift is complete."
+    logts "INFO: Deploying sample pipelines"
+    oc apply -n kabanero -f https://raw.githubusercontent.com/kabanero-io/kabanero-operator/${kabanero_version}/config/samples/default.yaml
+
+    logts "INFO: Kabanero installation on Minishift is complete."
     logts "INFO: You can access the Tekton dashboard in your browser through the following route."
     minishift --profile ${minishift_profile} openshift service tekton-dashboard 
+
+    echo "INFO: To launch the OKD console: \"minishift --profile ${minishift_profile} console\""
+    echo "INFO: To launch the Tekton dashboard: \"minishift --profile ${minishift_profile} openshift service tekton-dashboard --in-browser\""
 
     return ${result}
 }
